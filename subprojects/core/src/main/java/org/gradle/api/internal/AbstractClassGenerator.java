@@ -69,8 +69,8 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
     private static final Collection<String> SKIP_PROPERTIES = Arrays.asList("class", "metaClass", "conventionMapping", "convention", "asDynamicObject", "extensions");
 
     public <T> Class<? extends T> generate(Class<T> type) {
+        CACHE_LOCK.lock();
         try {
-            CACHE_LOCK.lock();
             return generateUnderLock(type);
         } finally {
             CACHE_LOCK.unlock();
