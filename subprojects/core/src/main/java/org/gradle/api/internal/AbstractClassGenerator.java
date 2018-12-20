@@ -91,15 +91,6 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
             return generatedClass.asSubclass(type);
         }
 
-        int modifiers = type.getModifiers();
-        if (Modifier.isPrivate(modifiers)) {
-            throw new ClassGenerationException(String.format("Cannot create a decorated class for private class '%s'.",
-                    type.getSimpleName()));
-        }
-        if (Modifier.isFinal(modifiers)) {
-            throw new ClassGenerationException(String.format("Cannot create a decorated class for final class '%s'.",
-                type.getSimpleName()));
-        }
         Class<? extends T> subclass;
         try {
             ClassMetaData classMetaData = inspectType(type);
@@ -211,6 +202,8 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
             }
 
             subclass = builder.generate();
+        } catch (ClassGenerationException e) {
+            throw e;
         } catch (Throwable e) {
             throw new ClassGenerationException(String.format("Could not generate a decorated class for class %s.", type.getName()), e);
         }

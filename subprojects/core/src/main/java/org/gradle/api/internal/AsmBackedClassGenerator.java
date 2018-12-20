@@ -128,6 +128,15 @@ public class AsmBackedClassGenerator extends AbstractClassGenerator {
         if (!decorate && !classMetaData.isShouldImplementWithServiceRegistry() && !Modifier.isAbstract(type.getModifiers())) {
             return new NoOpBuilder<T>(type);
         }
+        int modifiers = type.getModifiers();
+        if (Modifier.isPrivate(modifiers)) {
+            throw new ClassGenerationException(String.format("Cannot create a decorated class for private class '%s'.",
+                    type.getSimpleName()));
+        }
+        if (Modifier.isFinal(modifiers)) {
+            throw new ClassGenerationException(String.format("Cannot create a decorated class for final class '%s'.",
+                type.getSimpleName()));
+        }
         return new ClassBuilderImpl<T>(type, classMetaData, decorate);
     }
 

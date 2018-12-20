@@ -16,6 +16,7 @@
 
 package org.gradle.api.internal
 
+import org.gradle.api.internal.AsmBackedClassGeneratorTest.FinalBean
 import org.gradle.api.plugins.ExtensionAware
 import org.gradle.internal.service.ServiceRegistry
 
@@ -27,6 +28,16 @@ class AsmBackedClassGeneratorInjectUndecoratedTest extends AbstractClassGenerato
     def "returns original class when class is not abstract and no service getter methods present"() {
         expect:
         generator.generate(Bean) == Bean
+    }
+
+    def "can create instance of final class when a subclass is not required"() {
+        expect:
+        create(FinalBean) != null
+    }
+
+    def "can create instance of private class when a subclass is not required"() {
+        expect:
+        create(PrivateBean) != null
     }
 
     def "generates subclass when class is abstract"() {
@@ -65,6 +76,7 @@ class AsmBackedClassGeneratorInjectUndecoratedTest extends AbstractClassGenerato
 
     static abstract class AbstractBean {
         String a
+
         AbstractBean(String a) {
             this.a = a
         }
@@ -79,5 +91,13 @@ class AsmBackedClassGeneratorInjectUndecoratedTest extends AbstractClassGenerato
         Number getSomeValue() {
             throw new UnsupportedOperationException()
         }
+    }
+
+    static final class FinalBean
+    {
+    }
+
+    private static final class PrivateBean
+    {
     }
 }
