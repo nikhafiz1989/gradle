@@ -138,7 +138,10 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
                 if (property.injector) {
                     builder.addInjectorProperty(property);
                     for (Method getter : property.getters) {
-                        builder.applyServiceInjectionToGetter(property, getter);
+                        if (!getter.isBridge()) {
+                            // Don't overload bridge methods
+                            builder.applyServiceInjectionToGetter(property, getter);
+                        }
                     }
                     for (Method setter : property.setters) {
                         builder.applyServiceInjectionToSetter(property, setter);
