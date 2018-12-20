@@ -509,6 +509,7 @@ public class AsmBackedClassGeneratorTest {
 
         assertThat(bean.getNumber(), equalTo(123));
         assertThat(bean.getProp(), equalTo("conventionValue"));
+        assertThat(bean.getTypedProp(), equalTo(12L));
     }
 
     @Test
@@ -1551,19 +1552,29 @@ public class AsmBackedClassGeneratorTest {
         Number getNumber();
     }
 
-    public static abstract class AbstractWithProperties {
+    public static abstract class AbstractWithProperties<T> {
         abstract Object getProp();
+
+        abstract T getTypedProp();
+
+        final void setTypedProp(T t) {
+        }
     }
 
-    public static class BeanWithCovariantAbstract extends AbstractWithProperties implements WithProperties {
+    public static class BeanWithCovariantAbstract extends AbstractWithProperties<Long> implements WithProperties {
         @Override
-        String getProp() {
+        public String getProp() {
             return "string";
         }
 
         @Override
         public Integer getNumber() {
             return 12;
+        }
+
+        @Override
+        public final Long getTypedProp() {
+            return 12L;
         }
     }
 }
