@@ -24,6 +24,7 @@ import org.apache.commons.collections.map.AbstractReferenceMap;
 import org.apache.commons.collections.map.ReferenceMap;
 import org.gradle.api.Action;
 import org.gradle.api.NonExtensible;
+import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.api.provider.HasMultipleValues;
 import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Property;
@@ -38,6 +39,7 @@ import javax.inject.Inject;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -287,9 +289,13 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
         for (PropertyDetails property : classDetails.getProperties()) {
             PropertyMetaData propertyMetaData = classMetaData.property(property.getName());
             for (Method method : property.getGetters()) {
+                if (method.getAnnotation(Inject.class) == null && !method.getDeclaringClass().equals(ExtensionAware.class)) {
+                    assertNotAbstract(method);
+                }
                 propertyMetaData.addGetter(method);
             }
             for (Method method : property.getSetters()) {
+                assertNotAbstract(method);
                 propertyMetaData.addSetter(method);
             }
         }
@@ -304,6 +310,7 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
         }
 
         for (Method method : classDetails.getInstanceMethods()) {
+            assertNotAbstract(method);
             Class<?>[] parameterTypes = method.getParameterTypes();
             if (parameterTypes.length == 1) {
                 classMetaData.addCandidateSetMethod(method);
@@ -320,6 +327,12 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
                     classMetaData.shouldImplementWithServiceRegistry = true;
                 }
             }
+        }
+    }
+
+    private void assertNotAbstract(Method method) {
+        if (Modifier.isAbstract(method.getModifiers())) {
+            throw new IllegalArgumentException(String.format("Cannot have abstract method %s.%s().", method.getDeclaringClass().getSimpleName(), method.getName()));
         }
     }
 
@@ -398,6 +411,7 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
         final List<Method> getters = new ArrayList<Method>();
         final List<Method> setters = new ArrayList<Method>();
         final List<Method> setMethods = new ArrayList<Method>();
+        Method mainGetter;
         boolean injector;
 
         private PropertyMetaData(String name) {
@@ -414,19 +428,37 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
         }
 
         public Class<?> getType() {
-            if (!getters.isEmpty()) {
-                return getters.get(0).getReturnType();
+            if (mainGetter != null) {
+                return mainGetter.getReturnType();
             }
             return setters.get(0).getParameterTypes()[0];
         }
 
+        public Type getGenericType() {
+            if (mainGetter != null) {
+                return mainGetter.getGenericReturnType();
+            }
+            return setters.get(0).getGenericParameterTypes()[0];
+        }
+
         public void addGetter(Method method) {
-            if (getters.add(method) && method.getAnnotation(Inject.class) != null) {
+            getters.add(method);
+            if (method.getAnnotation(Inject.class) != null) {
                 injector = true;
+            }
+            if (mainGetter == null) {
+                mainGetter = method;
+            } else if (mainGetter.isBridge() && !method.isBridge()) {
+                mainGetter = method;
             }
         }
 
         public void addSetter(Method method) {
+            for (Method setter : setters) {
+                if (setter.getParameterTypes()[0].equals(method.getParameterTypes()[0])) {
+                    return;
+                }
+            }
             setters.add(method);
         }
 
