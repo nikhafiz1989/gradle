@@ -31,11 +31,6 @@ import static org.gradle.nativeplatform.fixtures.ToolChainRequirement.GCC_COMPAT
 @Requires(TestPrecondition.NOT_WINDOWS)
 class ObjectiveCLanguageIncrementalBuildIntegrationTest extends AbstractNativeLanguageIncrementalBuildIntegrationTest {
 
-    @Override
-    boolean isCanBuildForMultiplePlatforms() {
-        false
-    }
-
     @Ignore("Demos a problem with clang on ubuntu creating randomly different object files")
     def "generates always exactly same object file"() {
         setup:
