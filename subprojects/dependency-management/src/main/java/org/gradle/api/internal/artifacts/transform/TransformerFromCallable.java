@@ -16,17 +16,28 @@
 
 package org.gradle.api.internal.artifacts.transform;
 
+import com.google.common.collect.ImmutableSortedMap;
+import org.gradle.api.Action;
 import org.gradle.api.artifacts.transform.ArtifactTransformDependencies;
 import org.gradle.api.artifacts.transform.PrimaryInput;
 import org.gradle.api.artifacts.transform.Workspace;
 import org.gradle.api.internal.InstantiatorFactory;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
+import org.gradle.api.internal.file.FileResolver;
+import org.gradle.api.internal.tasks.DefaultPropertySpecFactory;
+import org.gradle.api.internal.tasks.execution.DefaultTaskProperties;
+import org.gradle.api.internal.tasks.execution.TaskFingerprinter;
+import org.gradle.api.internal.tasks.execution.TaskProperties;
+import org.gradle.api.internal.tasks.properties.PropertyWalker;
+import org.gradle.internal.Cast;
 import org.gradle.internal.UncheckedException;
+import org.gradle.internal.fingerprint.CurrentFileCollectionFingerprint;
 import org.gradle.internal.hash.HashCode;
 import org.gradle.internal.isolation.Isolatable;
 import org.gradle.internal.reflect.ClassDetails;
 import org.gradle.internal.reflect.ClassInspector;
 import org.gradle.internal.reflect.PropertyDetails;
+import org.gradle.internal.service.ServiceRegistration;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -43,12 +54,18 @@ public class TransformerFromCallable extends AbstractTransformer<Callable<List<F
 
     private final Method workspaceSetter;
     private final Method primaryInputSetter;
+    @Nullable
+    private final Class<?> configurationType;
+    @Nullable
+    private final Action<?> configurationAction;
 
-    public TransformerFromCallable(Class<? extends Callable<List<File>>> implementationClass, Isolatable<Object[]> paramsSnapshot, HashCode secondaryInputsHash, InstantiatorFactory instantiatorFactory, ImmutableAttributes from) {
+    public TransformerFromCallable(Class<? extends Callable<List<File>>> implementationClass, Isolatable<Object[]> paramsSnapshot, HashCode secondaryInputsHash, InstantiatorFactory instantiatorFactory, ImmutableAttributes from, @Nullable Class<?> configurationType, @Nullable Action<?> configurationAction) {
         super(implementationClass, paramsSnapshot, secondaryInputsHash, instantiatorFactory, from);
         // TODO: make this more general by hooking into `DefaultPropertyMetadataStore` or something similar
         this.workspaceSetter = findSetterAnnotatedWith(implementationClass, Workspace.class);
         this.primaryInputSetter = findSetterAnnotatedWith(implementationClass, PrimaryInput.class);
+        this.configurationType = configurationType;
+        this.configurationAction = configurationAction;
     }
 
     @Override
@@ -64,8 +81,21 @@ public class TransformerFromCallable extends AbstractTransformer<Callable<List<F
         }
     }
 
-    private void injectProperties(Callable<List<File>> transformer, File primaryInput, File outputDir) throws InvocationTargetException, IllegalAccessException {
-        if (workspaceSetter != null) {
+    @Override
+    public ImmutableSortedMap<String, CurrentFileCollectionFingerprint> getInputFileFingerprints(TaskFingerprinter taskFingerprinter, File primaryInput, PropertyWalker propertyWalker, FileResolver pathToFileResolver, Object owner, ArtifactTransformDependencies artifactTransformDependencies) {
+        Callable<List<File>> transformerInstance = newTransformer(artifactTransformDependencies);
+        try {
+            injectProperties(transformerInstance, primaryInput, null);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw UncheckedException.throwAsUncheckedException(e);
+        }
+
+        TaskProperties properties = DefaultTaskProperties.resolveInputs(propertyWalker, new DefaultPropertySpecFactory(owner, pathToFileResolver), owner.toString(), transformerInstance);
+        return taskFingerprinter.fingerprintTaskFiles(owner, properties.getInputFileProperties());
+    }
+
+    private void injectProperties(Callable<List<File>> transformer, File primaryInput, @Nullable File outputDir) throws InvocationTargetException, IllegalAccessException {
+        if (workspaceSetter != null && outputDir != null) {
             workspaceSetter.invoke(transformer, outputDir);
         }
         if (primaryInputSetter != null) {
@@ -98,5 +128,19 @@ public class TransformerFromCallable extends AbstractTransformer<Callable<List<F
             }
         }
         return false;
+    }
+
+    @Override
+    protected boolean hasAdditionalServices() {
+        return configurationType != null;
+    }
+
+    @Override
+    protected void registerAdditionalServices(InstantiatorFactory instantiatorFactory, ServiceRegistration registration) {
+        if (configurationType != null) {
+            Object configuration = instantiatorFactory.decorate().newInstance(configurationType);
+            Cast.<Action<Object>>uncheckedNonnullCast(configurationAction).execute(configuration);
+            registration.add(Cast.uncheckedNonnullCast(configurationType), configuration);
+        }
     }
 }

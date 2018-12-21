@@ -25,6 +25,7 @@ import org.gradle.internal.hash.HashCode;
 import org.gradle.internal.isolation.Isolatable;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.service.DefaultServiceRegistry;
+import org.gradle.internal.service.ServiceRegistration;
 
 import javax.annotation.Nullable;
 import java.io.File;
@@ -93,15 +94,25 @@ public abstract class AbstractTransformer<T> implements Transformer {
 
     protected T newTransformer(ArtifactTransformDependencies artifactTransformDependencies) {
         Instantiator instantiator;
-        if (requiresDependencies) {
+        if (requiresDependencies || hasAdditionalServices()) {
             DefaultServiceRegistry registry = new DefaultServiceRegistry();
-            registry.add(ArtifactTransformDependencies.class, artifactTransformDependencies);
+            if (requiresDependencies) {
+                registry.add(ArtifactTransformDependencies.class, artifactTransformDependencies);
+            }
+            if (hasAdditionalServices()) {
+                registry.register(registration -> registerAdditionalServices(instantiatorFactory, registration));
+            }
             instantiator = instantiatorFactory.inject(registry);
         } else {
             instantiator = instantiatorFactory.inject();
         }
         return instantiator.newInstance(implementationClass, parameters.isolate());
     }
+
+    protected void registerAdditionalServices(InstantiatorFactory instantiatorFactory, ServiceRegistration registration) {
+    }
+
+    protected abstract boolean hasAdditionalServices();
 
     @Override
     public HashCode getSecondaryInputHash() {
