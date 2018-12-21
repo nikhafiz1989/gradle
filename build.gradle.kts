@@ -189,55 +189,52 @@ allprojects {
 }
 
 distributedBuild {
-    pipeline {
-        val linuxJava11  = buildEnvironment("Linux amd64", "OpenJDK 11")
-        val linuxJava8   = buildEnvironment("Linux amd64", "OpenJDK 8")
-        val windowsJava8 = buildEnvironment("Windows 7 amd64", "Oracle JDK 8")
+    val linuxJava11  = buildEnvironment("Linux", "Linux amd64", "OpenJDK 11")
+    val linuxJava8   = buildEnvironment("LinuxJ8","Linux amd64", "OpenJDK 8")
+    val windowsJava8 = buildEnvironment("WindowsJ8","Windows 7 amd64", "Oracle JDK 8")
 
-        val compileAll = buildType("compileAllBuild", "compileAll",
-            splitBySubproject = false, environmentSpecific = false) {
+    warmupGroup("compileAll", linuxJava11) {
+        match<AbstractCompile>()
 
-            projectProperty("buildTimestamp", project.ext.get("buildTimestamp") as String)
+        projectProperty("buildTimestamp", project.ext.get("buildTimestamp") as String)
 
-            // TODO why can't we take this from cache?
-            excludeTask("prepareVersionsInfo")
-            // JmhBytecodeGeneratorTask uses absolute path sensitivity
-            excludeTask("jmhRunBytecodeGenerator")
-        }
+        // TODO why can't we take this from cache?
+        excludeTask("prepareVersionsInfo")
+        // JmhBytecodeGeneratorTask uses absolute path sensitivity
+        excludeTask("jmhRunBytecodeGenerator")
+    }
 
-        val sanityCheck = buildType("sanityCheck", listOf(":docs:checkstyleApi", ":allIncubationReportsZip",
-            ":distributions:checkBinaryCompatibility", "codeQuality", ":docs:check", ":docs:javadocAll",
-            ":architectureTest:test", ":toolingApi:toolingApiShadedJar"),
-            splitBySubproject = false, environmentSpecific = false) {
+    warmupGroup("sanityCheck", linuxJava11) {
+        match(":docs:checkstyleApi")
+        match(":allIncubationReportsZip")
+        match(":distributions:checkBinaryCompatibility")
+        match(":codeQuality")
+        match(":docs:check")
+        match(":docs:javadocAll")
+        match(":architectureTest:test")
+        match(":toolingApi:toolingApiShadedJar")
 
-            projectProperty("buildTimestamp", project.ext.get("buildTimestamp") as String)
+        projectProperty("buildTimestamp", project.ext.get("buildTimestamp") as String)
 
-            excludeTask("validateTaskProperties")
-            // JapicmpTask uses absolute path sensitivity absolute path
-            excludeTask(":distributions:checkBinaryCompatibility")
-        }
+        excludeTask("validateTaskProperties")
+        // JapicmpTask uses absolute path sensitivity absolute path
+        excludeTask(":distributions:checkBinaryCompatibility")
+    }
 
-        val quickTest = buildType("quickTest", listOf("test", "integTest", "crossVersionTest")) {
-            projectProperty("buildTimestamp", project.ext.get("buildTimestamp") as String)
+    subprojectDistribution("quickTest") {
+        environment(linuxJava11)
+        environment(windowsJava8)
 
-            excludeProject("architectureTest")
-            excludeProject("docs")
-            excludeProject("distributions")
-            excludeProject("soak")
-        }
+        subprojectTask("test")
+        subprojectTask("integTest")
+        subprojectTask("crossVersionTest")
 
-        pipeline {
-            stage("Compile", "Compile all code as preparation for everything else") {
-                invocation(compileAll, linuxJava11)
-            }
-            stage("Quick Feedback Linux", "Run checks and functional tests (embedded executer, Linux)") {
-                invocation(sanityCheck, linuxJava11)
-                invocation(quickTest, linuxJava11)
-            }
-            stage("Quick Feedback", "Run performance and functional tests (against distribution)") {
-                invocation(quickTest, windowsJava8)
-            }
-        }
+        projectProperty("buildTimestamp", project.ext.get("buildTimestamp") as String)
+
+        excludeProject("architectureTest")
+        excludeProject("docs")
+        excludeProject("distributions")
+        excludeProject("soak")
     }
 }
 
