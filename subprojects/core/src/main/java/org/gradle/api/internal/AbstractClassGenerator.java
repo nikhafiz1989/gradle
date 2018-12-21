@@ -288,12 +288,12 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
             PropertyMetaData propertyMetaData = classMetaData.property(property.getName());
             for (Method method : property.getGetters()) {
                 if (method.getAnnotation(Inject.class) == null && !method.getDeclaringClass().equals(ExtensionAware.class)) {
-                    assertNotAbstract(method);
+                    assertNotAbstract(type, method);
                 }
                 propertyMetaData.addGetter(method);
             }
             for (Method method : property.getSetters()) {
-                assertNotAbstract(method);
+                assertNotAbstract(type, method);
                 propertyMetaData.addSetter(method);
             }
         }
@@ -304,9 +304,7 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
         }
 
         for (Method method : classDetails.getInstanceMethods()) {
-            if (!method.getDeclaringClass().equals(GroovyObject.class)) {
-                assertNotAbstract(method);
-            }
+            assertNotAbstract(type, method);
             Class<?>[] parameterTypes = method.getParameterTypes();
             if (parameterTypes.length == 1) {
                 classMetaData.addCandidateSetMethod(method);
@@ -326,10 +324,11 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
         }
     }
 
-    private void assertNotAbstract(Method method) {
-        if (Modifier.isAbstract(method.getModifiers())) {
+    private void assertNotAbstract(Class<?> type, Method method) {
+        if (Modifier.isAbstract(type.getModifiers()) && Modifier.isAbstract(method.getModifiers())) {
             throw new IllegalArgumentException(String.format("Cannot have abstract method %s.%s().", method.getDeclaringClass().getSimpleName(), method.getName()));
         }
+        // Else, ignore abstract methods on non-abstract classes as some other tooling (e.g. the Groovy compiler) has decided this is ok
     }
 
     protected static class ClassMetaData {
