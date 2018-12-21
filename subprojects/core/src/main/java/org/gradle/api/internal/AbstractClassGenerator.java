@@ -304,7 +304,9 @@ public abstract class AbstractClassGenerator implements ClassGenerator {
         }
 
         for (Method method : classDetails.getInstanceMethods()) {
-            assertNotAbstract(method);
+            if (!method.getDeclaringClass().equals(GroovyObject.class)) {
+                assertNotAbstract(method);
+            }
             Class<?>[] parameterTypes = method.getParameterTypes();
             if (parameterTypes.length == 1) {
                 classMetaData.addCandidateSetMethod(method);
